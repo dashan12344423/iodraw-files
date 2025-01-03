@@ -1,5 +1,4 @@
 ```mermaid
-graph TD;
 
     subgraph "销售管理流程"
         sale_order("sale_order<br>销售订单主表") -->|外键关联<br>sale_no| sale_order_detail("sale_order_detail<br>销售订单明细表");
@@ -57,23 +56,41 @@ graph TD;
     end 
 
     subgraph "生产管理流程"
+        subgraph "生产计划制定阶段"
+            ProductionPlanStart("生产需求分析") -->|制定生产计划| ProduceProductPlanCreate("创建生产计划<br>produce_product_plan")
+            ProduceProductPlanCreate -->|关联工单信息| ProduceProductWorkOrderLink("关联生产工单<br>produce_product_work_order")
+            ProduceProductWorkOrderLink -->|细化产品规格等| ProduceProductQrcodeLink("关联产品二维码<br>produce_product_qrcode")
+            ProduceProductQrcodeLink -->|确定生产任务| ProduceProductTaskCreate("创建生产任务<br>produce_product_task")
+        end
+
         subgraph "生产领料阶段"
-            ProductionRequisitionCreate("生产需求产生") -->|发起领料流程| StorageProductionRequisitionCreate("创建生产领料主表<br>storage_production_requisition")
+            ProduceProductTaskCreate -->|发起领料流程| StorageProductionRequisitionCreate("创建生产领料主表<br>storage_production_requisition")
             StorageProductionRequisitionCreate -->|关联生产计划| StorageProductionRequisitionPlanCreate("添加生产计划（生产领料副表）<br>storage_production_requisition_plan")
             StorageProductionRequisitionPlanCreate -->|细化领料信息| StorageProductionRequisitionDetailCreate("创建领料单详情信息（生产领料详情表）<br>storage_production_requisition_detail")
             StorageProductionRequisitionDetailCreate -->|进一步明细| StorageProductionRequisitionDetailDetailCreate("创建领料单详情信息-领料明细表<br>storage_production_requisition_detail_detail")
             StorageProductionRequisitionDetailCreate -->|领料操作| RequisitionTake("执行领料操作，更新状态等")
         end
 
-        subgraph "生产退料阶段"
-            ProductionReturnCreate("产生退料需求") -->|发起退料流程| StorageProductionReturnProCreate("创建生产退料主表<br>storage_production_return_pro")
-            StorageProductionReturnProCreate -->|关联退料产品信息| StorageProductionReturnProDetailCreate("添加生产退料 详细信息<br>storage_production_return_pro_detail")
-            StorageProductionReturnProDetailCreate -->|退料明细记录| StorageProductionReturnProDetailDetailCreate("创建生产退料详情 -退料料明细表<br>storage_production_return_pro_detail_detail")
-            StorageProductionReturnProDetailCreate -->|执行退料操作| ReturnProHandle("更新相关状态及库存信息等")
+        subgraph "生产执行阶段"
+            ProduceProductTaskCreate -->|开始生产任务| ProduceReportWorkCreate("创建报工信息<br>produce_report_work")
+            ProduceReportWorkCreate -->|记录上料情况| ProduceFeedRackDetailCreate("创建上料/投料明细表<br>produce_feed_rack_detail")
+            ProduceReportWorkCreate -->|记录专属报工字段| ProduceReportExclusiveCreate("创建报工专属字段<br>produce_report_exclusive")
+            ProduceReportWorkCreate -->|涉及委外情况| ProduceOutsourceInfoCreate("创建委外基础信息<br>produce_outsource_info")
+            ProduceOutsourceInfoCreate -->|关联委外产品信息| ProduceOutsourceProInfoCreate("添加委外产品信息<br>produce_outsource_pro_info")
+            ProduceOutsourceProInfoCreate -->|关联委外物料清单| ProduceOutsourceMaterialInfoCreate("创建委外物料清单<br>produce_outsource_material_info")
+            ProduceOutsourceMaterialInfoCreate -->|出库明细记录| ProduceOutsourceMaterialDetailCreate("创建委外物料清单-出库明细表<br>produce_outsource_material_detail")
+            ProduceOutsourceMaterialInfoCreate -->|退回明细记录| ProduceOutsourceMaterialReturnDetailCreate("创建委外物料清单-退回明细表<br>produce_outsource_material_return_detail")
+        end
+
+        subgraph "生产质检与调整阶段"
+            ProduceReportWorkCreate -->|生产过程质检| QualityCheckInProduction("进行生产中的质检流程")
+            QualityCheckInProduction -->|合格继续生产| ProduceReportWorkCreate
+            QualityCheckInProduction -->|不合格返修处理| ProduceReturnfixCreate("创建返修记录<br>produce_returnfix")
+            ProduceReturnfixCreate -->|返修后继续生产| ProduceReportWorkCreate
         end
 
         subgraph "生产入库阶段"
-            ProductionInhouseCreate("生产完成准备入库") -->|发起入库流程| StorageProductionInhouseCreate("创建生产入库主表<br>storage_production_inhouse")
+            ProduceReportWorkCreate -->|生产完成准备入库| StorageProductionInhouseCreate("创建生产入库主表<br>storage_production_inhouse")
             StorageProductionInhouseCreate -->|关联入库产品信息| StorageProductionInhousePlanCreate("添加计划工单产品或者非计划工单产品<br>storage_production_inhouse_plan")
             StorageProductionInhousePlanCreate -->|入库产品明细| StorageProductionInhousePlanDetailCreate("创建入库产品详情<br>storage_production_inhouse_plan_detail")
             StorageProductionInhousePlanDetailCreate -->|执行入库操作| InhouseHandle("更新库存等相关信息")
