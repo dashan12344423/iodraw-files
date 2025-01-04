@@ -101,12 +101,33 @@ graph TD;
         StorageProductionRequisitionPlanCreate -->|通过plan_no和pr_no外键关联| StorageProductionRequisitionDetailCreate
     end
 
-    subgraph "车间调拨流程"
-        TransferOrderCreate("调拨需求产生") -->|发起调拨流程| StorageTransferOrderCreate("创建车间调拨基础信息<br>storage_transfer_order")
-        StorageTransferOrderCreate -->|关联调拨物料信息| StorageCarAllotCreate("添加车间调拨物料<br>storage_car_allot")
-        StorageCarAllotCreate -->|明细记录| StorageCarAllotDetailCreate("创建车间调拨-调入明细<br>storage_car_allot_detail")
-        StorageCarAllotDetailCreate -->|执行调拨操作| AllotHandle("更新调出和调入仓库库存等信息")
-    end
+graph TD;
+
+    %% 车间调拨主流程
+    TransferOrderCreate("调拨需求产生") -->|发起调拨流程| StorageTransferOrderCreate("创建调拨基础信息")
+    StorageTransferOrderCreate -->|关联调拨物料| StorageCarAllotCreate("添加调拨物料")
+    StorageCarAllotCreate -->|记录调入明细| StorageCarAllotDetailCreate("创建调拨明细")
+
+    %% 提交调拨阶段（先调拨中，再已完成）
+    StorageCarAllotDetailCreate -->|提交调拨操作| Submit("提交")
+    Submit -->|先进入调拨中阶段| Submitting1("调拨中阶段")
+    Submitting1 -->|更新调拨单状态等| UpdateTransferOrder1("根据调拨单号将 storage_transfer_order 表中入库状态 allot_status 改为调拨中，<br>实际调拨人，调拨日期等")
+    UpdateTransferOrder1 -->|修改实际调出数量| UpdateCarAllotOut("根据 id 去 storage_car_allot 表中修改对应数据的实际调出数量")
+    UpdateCarAllotOut -->|更新调出库存总览| UpdateInventoryOverviewOut("更新库存总览表 storage_inventory_overview(<br>对应仓库，物料有则减掉，如果减完后数量<=0，则删除掉)")
+    UpdateInventoryOverviewOut -->|判断是否为非线边库| CheckOutWarehouseType1("判断调出仓库是否为非线边库")
+    CheckOutWarehouseType1 -->|是| UpdateInventoryDetailOut("更新库存明细表 storage_inventory_detail 中的库存数据.<br>根据物料编号，仓库编号，货架编号，库位编号，批次号去库存明细表中减掉对应的库存。<br>如果减完后库存<=0，则删除掉")
+    CheckOutWarehouseType1 -->|否| UpdateWirelineStorageOut("更新线边库明细表 storage_wireline_storage 中的库存数据.<br>根据物料编号,仓库编号,批次号进行减库存<br>如果减完库存<=0,则删除掉")
+
+    Submitting1 -->|进入已完成阶段| Submitting2("已完成阶段")
+    Submitting2 -->|更新调拨单状态| UpdateTransferOrder2("根据调拨单号将 storage_transfer_order 表中入库状态 allot_status 改为已完成")
+    UpdateTransferOrder2 -->|写入调入明细| WriteCarAllotDetail("向车间调拨-调入明细表 storage_car_allot_detail 中写入数据")
+    WriteCarAllotDetail -->|汇总实际调入数量| CalculateTotalIn("通过写入数据的 allot_id， 进行汇总得出每个 allot_id 的实际调入数据之和，<br>然后根据 allot_id 去 storage_car_allot 表中修改对应数据的实际调入数量")
+    CalculateTotalIn -->|更新调入库存总览| UpdateInventoryOverviewIn("更新库存总览表 storage_inventory_overview (<br>对应仓库，物料有则累加，没有则新增)")
+    UpdateInventoryOverviewIn -->|判断是否为非线边库| CheckInWarehouseType("判断调入仓库是否为非线边库")
+    CheckInWarehouseType -->|是| UpdateInventoryDetailIn("更新库存明细表 storage_inventory_detail 中的库存数据.<br>如果是同一天入库则入库日期一致, 且物料编号,仓库编号,货架编号,库位编号,生产车间(可为空值),批次号一致,则累加<br>反之则新增")
+    CheckInWarehouseType -->|否| UpdateWirelineStorageIn("更新线边库明细表 storage_wireline_storage 中的库存数据.")
+
+    Submitting2 -->|执行调拨，更新库存| AllotHandle("更新调出和调入仓库库存等信息")
 
     subgraph "库存管理流程"
         subgraph "库存盘点流程"
